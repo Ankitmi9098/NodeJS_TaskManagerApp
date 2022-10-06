@@ -3,6 +3,9 @@ const auth = require("../middleware/auth");
 const { findById } = require("../models/user");
 const router = new express.Router();
 const User = require("../models/user");
+const multer = require("multer");
+const sharp = require("sharp");
+// const { sendWelcomeEmail } = require("../emails/account");
 
 //create users
 router.post("/users", async (req, res) => {
@@ -10,6 +13,7 @@ router.post("/users", async (req, res) => {
   try {
     await user.save();
     const token = await user.generateAuthToken();
+    // sendWelcomeEmail(user.email, user.name);
     res.status(201).send({ user, token });
   } catch (e) {
     res.status(400).send(e);
@@ -90,21 +94,21 @@ router.get("/users/me", auth, async (req, res) => {
 
 //Update my profile
 router.patch("/users/me", auth, async (req, res) => {
-    const updates = Object.keys(req.body);
-    const allowedUpdates = ["name", "email", "password", "age"];
-    const isvalidOperation = updates.every((update) =>
-      allowedUpdates.includes(update)
-    );
-    if (!isvalidOperation) {
-      return res.status(400).send({ error: "You cant update this parameter" });
-    }
-    try {
-      updates.forEach((update) => (req.user[update] = req.body[update]));
-      await req.user.save();
-      res.status(200).send(req.user);
-    } catch (e) {
-      res.status(400).send();
-    }
+  const updates = Object.keys(req.body);
+  const allowedUpdates = ["name", "email", "password", "age"];
+  const isvalidOperation = updates.every((update) =>
+    allowedUpdates.includes(update)
+  );
+  if (!isvalidOperation) {
+    return res.status(400).send({ error: "You cant update this parameter" });
+  }
+  try {
+    updates.forEach((update) => (req.user[update] = req.body[update]));
+    await req.user.save();
+    res.status(200).send(req.user);
+  } catch (e) {
+    res.status(400).send();
+  }
 });
 
 //Delete account
@@ -119,6 +123,61 @@ router.delete("/users/me", auth, async (req, res) => {
     res.send({ user: req.user, message: "Your account has been deleted" });
   } catch (e) {
     res.status(500).send();
+  }
+});
+
+//Upload Avatars
+const upload = multer({
+  // dest: "avatars",
+  limits: {
+    fileSize: 1000000, //1MB
+  },
+  fileFilter(req, file, callBack) {
+    if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
+      return callBack(new Error("Please Upload JPG, JPEG or PNG file. "));
+    }
+    callBack(undefined, true);
+  },
+});
+
+//Upload Avatar
+router.post(
+  "/users/me/avatar",
+  auth,
+  upload.single("avatar"),
+  async (req, res) => {
+    const buffer = await sharp(req.file.buffer)
+      .resize({ width: 250, height: 250 })
+      .png()
+      .toBuffer();
+    req.user.avatar = buffer; // we can only use req.file.buffer if we have not declared destination in multer object.
+    await req.user.save();
+    res.send();
+  },
+  (error, req, res, next) => {
+    res.status(400).send({ error: error.message });
+  }
+);
+
+//Delete Avatar
+router.delete("/users/me/avatar", auth, async (req, res, next) => {
+  req.user.avatar = undefined;
+  await req.user.save();
+  res.status(200).send({ message: "Avatar deleted successfully" });
+});
+
+//Fetch Route
+router.get("/users/:id/avatar", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user || !user.avatar) {
+      throw new Error();
+    }
+
+    res.set("Content-Type", "image/png");
+    res.send(user.avatar);
+  } catch (error) {
+    res.status(404).send();
   }
 });
 

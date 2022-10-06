@@ -5,61 +5,69 @@ const jwt = require("jsonwebtoken");
 const res = require("express/lib/response");
 const Task = require("./task");
 
-const userSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  email: {
-    type: String,
-    unique: true,
-    required: true,
-    trim: true,
-    lowercase: true,
-    validate(value) {
-      if (!validator.isEmail(value)) {
-        throw new Error("Email is invalid");
-      }
+const userSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
     },
-  },
-  age: {
-    type: Number,
-    default: 0,
-    validate(value) {
-      if (value < 0) {
-        throw new Error(" Age must be a positive number");
-      }
-    },
-  },
-  password: {
-    type: String,
-    required: true,
-    minlength: [7, "Password length should be greater than 6"],
-    trim: true,
-    validate(value) {
-      if (value.toLowerCase().includes("password")) {
-        throw new Error("Password cannot contain 'Password'. ");
-      }
-    },
-  },
-
-  tokens: [
-    {
-      token: {
-        type: String,
-        required: true,
+    email: {
+      type: String,
+      unique: true,
+      required: true,
+      trim: true,
+      lowercase: true,
+      validate(value) {
+        if (!validator.isEmail(value)) {
+          throw new Error("Email is invalid");
+        }
       },
     },
-  ],
-},{
-timestamps: true,
-});
+    age: {
+      type: Number,
+      default: 0,
+      validate(value) {
+        if (value < 0) {
+          throw new Error(" Age must be a positive number");
+        }
+      },
+    },
+    password: {
+      type: String,
+      required: true,
+      minlength: [7, "Password length should be greater than 6"],
+      trim: true,
+      validate(value) {
+        if (value.toLowerCase().includes("password")) {
+          throw new Error("Password cannot contain 'Password'. ");
+        }
+      },
+    },
 
+    tokens: [
+      {
+        token: {
+          type: String,
+          required: true,
+        },
+      },
+    ],
+    avatar: {
+      type: Buffer,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
 userSchema.methods.generateAuthToken = async function () {
   try {
     const user = this;
-    const token = jwt.sign({ _id: user._id.toString() }, "thisismynewcourse");
+    const token = jwt.sign(
+      { _id: user._id.toString() },
+      process.env.JWT_SECRET
+    );
     user.tokens = user.tokens.concat({ token: token });
     await user.save();
     return token;
@@ -83,8 +91,8 @@ userSchema.methods.toJSON = function () {
   const userObject = user.toObject();
   delete userObject.password;
   delete userObject.tokens;
-  delete userObject._id;
   delete userObject.__v;
+  delete userObject.avatar;
   return userObject;
 };
 userSchema.statics.findByCredentials = async (email, password) => {
